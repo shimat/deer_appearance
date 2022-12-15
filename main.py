@@ -29,10 +29,10 @@ ICON_DATA = {
 #logger.addHandler(ch)
 
 
-def find_date_range(tweets: list[Tweet]) -> tuple[str, str, int]:
+def find_date_range(tweets: list[Tweet]) -> tuple[str, str]:
     latest = datetime.fromisoformat(tweets[0].created_at)
     oldest = datetime.fromisoformat(tweets[-1].created_at)
-    return (oldest.strftime("%Y/%m/%d"), latest.strftime("%Y/%m/%d"), (latest - oldest).days)
+    return (oldest, latest)
 
 
 def extract_appearance(tweets: Iterable[Tweet]) -> Iterable[Appearance]:    
@@ -59,7 +59,7 @@ def extract_appearance(tweets: Iterable[Tweet]) -> Iterable[Appearance]:
                     sections.append((match.group("st"), ""))
             if not sections:
                 #logger.debug(f"Error(location): {tweet.text=}")
-                f.write(f"Error(location): {text=}\n")
+                #f.write(f"Error(location): {text=}\n")
                 continue            
 
             date_str = datetime.fromisoformat(tweet.created_at).strftime("%Y/%m/%d")
@@ -75,11 +75,17 @@ tweets = get_tweets()
 #j = json.dumps({ "total": len(tweets), "tweets": [ t.__dict__ for t in tweets] }, ensure_ascii=False, indent=2)
 #Path("data/tweets.json").write_text(j, encoding="utf-8-sig")
 
+oldest, latest = find_date_range(tweets)
+date_range = (latest - oldest)
+start_color, end_color = st.select_slider(
+    "期間を選択",
+    options=['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'],
+    value=('red', 'blue'))
+
 appearances = list(extract_appearance(tweets))
 #j = json.dumps([a.__dict__ for a in appearances], ensure_ascii=False, indent=2)
 #st.json(j)
-dr = find_date_range(tweets)
-st.text(f"集計期間: {dr[0]}～{dr[1]} ({dr[2]}日), 件数: {len(appearances)}")
+st.text(f"集計期間: {oldest.strftime('%Y/%m/%d')}～{latest.strftime('%Y/%m/%d')} ({date_range.days}日), 件数: {len(appearances)}")
 
 rows = []
 for a in appearances:
