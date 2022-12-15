@@ -12,7 +12,7 @@ class Tweet:
 class Appearance:
     datetime: str
     sections: list[tuple[str, str]]
-    animal: str
+    reason: str
     train: str
     text: str
 

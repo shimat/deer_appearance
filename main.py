@@ -1,15 +1,16 @@
 from datetime import datetime
-from typing import Iterable
-import streamlit as st
-import re
 import json
+import logging 
 from pathlib import Path
+import re
+from typing import Iterable
 import pandas as pd
 import numpy as np
 import pydeck as pdk
+import streamlit as st
 
 from models import Tweet, Appearance, Location
-from data_loader import get_tweets, get_tweets_2, get_station_locations
+from data_loader import get_tweets, get_station_locations
 
 
 ICON_DATA = {
@@ -18,7 +19,14 @@ ICON_DATA = {
     "height": 1053,
     "anchorY": 1053,
 }
-TWEETS_COUNT = 1000
+
+
+#logger = logging.getLogger(__name__)
+#logger.setLevel(logging.DEBUG)
+#fh = logging.FileHandler("error_log.txt", mode="w", encoding="utf-8-sig")
+#ch = logging.StreamHandler()
+#logger.addHandler(fh)
+#logger.addHandler(ch)
 
 
 def find_date_range(tweets: list[Tweet]) -> tuple[str, str, int]:
@@ -27,41 +35,45 @@ def find_date_range(tweets: list[Tweet]) -> tuple[str, str, int]:
     return (oldest.strftime("%Y/%m/%d"), latest.strftime("%Y/%m/%d"), (latest - oldest).days)
 
 
-def extract_appearance(tweets: Iterable[Tweet]) -> Iterable[Appearance]:
+def extract_appearance(tweets: Iterable[Tweet]) -> Iterable[Appearance]:    
     for tweet in tweets:
         for text in re.split("ならびに", tweet.text):
-            #if not (match := re.search(r"(?P<datetime>\d{4}年\d{1,2}月\d{1,2}日\d{1,2}時\d{1,2}分)現在", tweet.text)):
-            #    print(f"Error(datetime): {tweet.text=}")
-            #    continue
-            #datetime_string = match.group("datetime")
+
+            #text = text.replace("\u3000", "")
             text = re.sub("および|及び|、", " & ", text)
             text = re.sub("間と", "間 & ", text)
+
+            if match := re.search(r"(?P<train>列車|特急\S+|快速\S*?|はこだてライナー)(が|は.+?(で|において))(?P<reason>(?P<animal>\S+)(と|を|の)(接触|衝突|衝撃|発見|巻き込んで))", text):
+                reason, train = match.group("reason", "train")
+            else:
+                #logger.debug(f"Error(animal): {tweet.text=}")
+                #f.write(f"Error(animal): {text=}\n")
+                continue
+            train = "普通列車" if train == "列車" else train 
+
             sections: list[tuple[str, str]] = []
-            for match in re.finditer(r"(?P<st1>\S+?)駅?(～|\-)(?P<st2>\S+?)[駅席]?間", text):
+            for match in re.finditer(r"(?P<st1>\S+?)駅?(～|\~|\-|－|(?<!ビ)ー(?!ル))(?P<st2>\S+?)[駅席]?(間で|間にて|間?(付近)?において|間の.+?踏切)", text):
                 sections.append(match.group("st1", "st2"))
             if not sections:
-                #print(f"Error(location): {tweet.text=}")
-                continue
-            
-            if not (match := re.search(r"(?P<train>列車|特急\S+)が(?P<animal>\S+)と接触", text)):
-                #print(f"Error(animal): {tweet.text=}")
-                #animal, train = "", ""
-                continue
-            else:
-                animal, train = match.group("animal"), match.group("train")
+                for match in re.finditer(r"(?P<st>\S+?)(駅構内|駅?付近において)", text):
+                    sections.append((match.group("st"), ""))
+            if not sections:
+                #logger.debug(f"Error(location): {tweet.text=}")
+                f.write(f"Error(location): {text=}\n")
+                continue            
 
             date_str = datetime.fromisoformat(tweet.created_at).strftime("%Y/%m/%d")
-            yield Appearance(date_str, sections, animal, train, text)
+            yield Appearance(date_str, sections, reason, train, text)
 
 
-st.title("鹿発生マップ")
+st.set_page_config(page_title="JR北海道 鹿衝突マップ")
+st.title("JR北海道 鹿衝突マップ")
 
 station_locations = get_station_locations()
 
-tweets = get_tweets_2(TWEETS_COUNT)
-
-#j = json.dumps({"tweets": [ t.__dict__ for t in tweets] }, ensure_ascii=False, indent=2)
-#Path("tweets.json").write_text(j, encoding="utf-8-sig")
+tweets = get_tweets()
+#j = json.dumps({ "total": len(tweets), "tweets": [ t.__dict__ for t in tweets] }, ensure_ascii=False, indent=2)
+#Path("data/tweets.json").write_text(j, encoding="utf-8-sig")
 
 appearances = list(extract_appearance(tweets))
 #j = json.dumps([a.__dict__ for a in appearances], ensure_ascii=False, indent=2)
@@ -72,10 +84,14 @@ st.text(f"集計期間: {dr[0]}～{dr[1]} ({dr[2]}日), 件数: {len(appearances
 rows = []
 for a in appearances:
     for s in a.sections:
-        mid = Location.midpoint(station_locations[s[0]], station_locations[s[1]])
-        train = "普通列車" if a.train == "列車" else a.train 
-        text = f"{s[0]} ～ {s[1]} 駅間\n{a.datetime} {train}\n{a.animal}と衝突"
-        rows.append((mid.lat, mid.lon, text, ICON_DATA))
+        if s[1] == "":
+            lat, lon = station_locations[s[0]].to_tuple()
+            place = f"{s[0]}駅"
+        else:
+            lat, lon = Location.midpoint(station_locations[s[0]], station_locations[s[1]]).to_tuple()
+            place = f"{s[0]} ～ {s[1]} 駅間"
+        text = f"{place}\n{a.datetime} {a.train}\n{a.reason}"
+        rows.append((lat, lon, text, ICON_DATA))
 
 data = pd.DataFrame(
    rows,
