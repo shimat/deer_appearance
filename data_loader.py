@@ -23,7 +23,7 @@ def get_tweets() -> list[Tweet]:
 
 #@st.experimental_memo
 def get_station_locations() -> dict[str, Location]:
-    with open("station_locations.csv", "r", encoding="utf-8-sig", newline="") as file:
+    with open("data/station_locations.csv", "r", encoding="utf-8-sig", newline="") as file:
         csv_reader = csv.DictReader(file)
         result = {}
         for row in csv_reader:

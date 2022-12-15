@@ -63,7 +63,7 @@ data = pd.DataFrame(
    columns=['lat', 'lon'])
 
 icon_data = {
-    "url": "animal_deer.png",
+    "url": "https://raw.githubusercontent.com/shimat/deer_appearance/946ddcc9cb44e8561ae5a577e3cc031a7a56d546/animal_deer.png",
     "width": 242,
     "height": 242,
     "anchorY": 242,
@@ -93,3 +93,11 @@ st.pydeck_chart(pdk.Deck(
     ],
     tooltip={"text": "{lat}"}
 ))
+
+st.markdown("""
+---
+
+利用データ:
++ いらすとや: https://www.irasutoya.com/2013/07/blog-post_4288.html
+""")
+
