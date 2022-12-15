@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Iterable
 import streamlit as st
 import re
@@ -8,7 +9,22 @@ import numpy as np
 import pydeck as pdk
 
 from models import Tweet, Appearance, Location
-from data_loader import get_tweets, get_station_locations
+from data_loader import get_tweets, get_tweets_2, get_station_locations
+
+
+ICON_DATA = {
+    "url": "https://raw.githubusercontent.com/shimat/deer_appearance/5554b83be16fc41d857d33ef83ee15d82b55f0e0/data/animal_deer.png",
+    "width": 803,
+    "height": 1053,
+    "anchorY": 1053,
+}
+TWEETS_COUNT = 1000
+
+
+def find_date_range(tweets: list[Tweet]):
+    latest = datetime.fromisoformat(tweets[0].created_at)
+    oldest = datetime.fromisoformat(tweets[-1].created_at)
+    return (oldest.strftime("%Y/%m/%d"), latest.strftime("%Y/%m/%d"))
 
 
 def extract_appearance(tweets: Iterable[Tweet]) -> Iterable[Appearance]:
@@ -19,66 +35,59 @@ def extract_appearance(tweets: Iterable[Tweet]) -> Iterable[Appearance]:
             #    continue
             #datetime_string = match.group("datetime")
             text = re.sub("および|及び|、", " & ", text)
+            text = re.sub("間と", "間 & ", text)
             sections: list[tuple[str, str]] = []
-            for match in re.finditer(r"(?P<st1>\S+?駅?)(～|\-)(?P<st2>\S+?駅?)間", text):
-                sections.append(
-                    (match.group("st1").removesuffix("駅"), match.group("st2").removesuffix("駅")))
+            for match in re.finditer(r"(?P<st1>\S+?)駅?(～|\-)(?P<st2>\S+?)[駅席]?間", text):
+                sections.append(match.group("st1", "st2"))
             if not sections:
                 #print(f"Error(location): {tweet.text=}")
                 continue
             
             if not (match := re.search(r"(?P<train>列車|特急\S+)が(?P<animal>\S+)と接触", text)):
                 #print(f"Error(animal): {tweet.text=}")
-                animal, train = "", ""
+                #animal, train = "", ""
+                continue
             else:
                 animal, train = match.group("animal"), match.group("train")
 
-            yield Appearance(tweet.created_at, sections, animal, train, text)
+            date_str = datetime.fromisoformat(tweet.created_at).strftime("%Y/%m/%d")
+            yield Appearance(date_str, sections, animal, train, text)
 
 
 st.title("鹿発生マップ")
 
-print("==========")
-
 station_locations = get_station_locations()
-#st.write(station_locations)
 
-tweets = get_tweets()
+tweets = get_tweets_2(TWEETS_COUNT)
+
+date_range = find_date_range(tweets)
 #j = json.dumps({"tweets": [ t.__dict__ for t in tweets] }, ensure_ascii=False, indent=2)
 #Path("tweets.json").write_text(j, encoding="utf-8-sig")
 
 appearances = list(extract_appearance(tweets))
-#st.write(appearances)
-j = json.dumps([a.__dict__ for a in appearances], ensure_ascii=False, indent=2)
-st.json(j)
+#j = json.dumps([a.__dict__ for a in appearances], ensure_ascii=False, indent=2)
+#st.json(j)
+st.text(f"集計期間: {date_range[0]}～{date_range[1]}, 件数: {len(appearances)}")
 
-locations = [
-    Location.midpoint(station_locations[s[0]], station_locations[s[1]]) 
-    for a in appearances 
-    for s in a.sections]
-st.write(locations)
+rows = []
+for a in appearances:
+    for s in a.sections:
+        mid = Location.midpoint(station_locations[s[0]], station_locations[s[1]])
+        train = "普通列車" if a.train == "列車" else a.train 
+        text = f"{s[0]} ～ {s[1]} 駅間\n{a.datetime} {train}\n{a.animal}と衝突"
+        rows.append((mid.lat, mid.lon, text, ICON_DATA))
 
 data = pd.DataFrame(
-   [l.to_tuple() for l in locations],
-   columns=['lat', 'lon'])
-
-icon_data = {
-    "url": "https://raw.githubusercontent.com/shimat/deer_appearance/946ddcc9cb44e8561ae5a577e3cc031a7a56d546/animal_deer.png",
-    "width": 242,
-    "height": 242,
-    "anchorY": 242,
-}
-data["icon_data"] = None
-for i in data.index:
-    data["icon_data"][i] = icon_data
+   rows,
+   columns=["lat", "lon", "text", "icon_data"])
 
 st.pydeck_chart(pdk.Deck(
-    map_style="road",
+    map_style="light",
     initial_view_state=pdk.ViewState(
-        latitude=43.0,
-        longitude=142.5,
+        latitude=43.6,
+        longitude=142.7,
         zoom=6,
-        pitch=30,
+        pitch=0,
     ),
     layers=[
         pdk.Layer(
@@ -91,13 +100,21 @@ st.pydeck_chart(pdk.Deck(
             pickable=True,
         ),
     ],
-    tooltip={"text": "{lat}"}
+    tooltip={"text": "{text}"}
 ))
+
+#j = json.dumps([a.__dict__ for a in appearances], ensure_ascii=False, indent=2)
+#st.json(j)
+
+st.table(data)
 
 st.markdown("""
 ---
 
 利用データ:
++ JR北海道 在来線運行情報【非公式】[@JRHbot](https://twitter.com/JRHbot)
++ Twitter API: https://developer.twitter.com/
++ 鉄道駅LOD: https://uedayou.net/jrslod/
 + いらすとや: https://www.irasutoya.com/2013/07/blog-post_4288.html
 """)
 
