@@ -21,10 +21,10 @@ ICON_DATA = {
 TWEETS_COUNT = 1000
 
 
-def find_date_range(tweets: list[Tweet]):
+def find_date_range(tweets: list[Tweet]) -> tuple[str, str, int]:
     latest = datetime.fromisoformat(tweets[0].created_at)
     oldest = datetime.fromisoformat(tweets[-1].created_at)
-    return (oldest.strftime("%Y/%m/%d"), latest.strftime("%Y/%m/%d"))
+    return (oldest.strftime("%Y/%m/%d"), latest.strftime("%Y/%m/%d"), (latest - oldest).days)
 
 
 def extract_appearance(tweets: Iterable[Tweet]) -> Iterable[Appearance]:
@@ -60,14 +60,14 @@ station_locations = get_station_locations()
 
 tweets = get_tweets_2(TWEETS_COUNT)
 
-date_range = find_date_range(tweets)
 #j = json.dumps({"tweets": [ t.__dict__ for t in tweets] }, ensure_ascii=False, indent=2)
 #Path("tweets.json").write_text(j, encoding="utf-8-sig")
 
 appearances = list(extract_appearance(tweets))
 #j = json.dumps([a.__dict__ for a in appearances], ensure_ascii=False, indent=2)
 #st.json(j)
-st.text(f"集計期間: {date_range[0]}～{date_range[1]}, 件数: {len(appearances)}")
+dr = find_date_range(tweets)
+st.text(f"集計期間: {dr[0]}～{dr[1]} ({dr[2]}日), 件数: {len(appearances)}")
 
 rows = []
 for a in appearances:
@@ -106,7 +106,7 @@ st.pydeck_chart(pdk.Deck(
 #j = json.dumps([a.__dict__ for a in appearances], ensure_ascii=False, indent=2)
 #st.json(j)
 
-st.table(data)
+#st.table(data)
 
 st.markdown("""
 ---
