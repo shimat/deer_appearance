@@ -71,7 +71,7 @@ def extract_appearance(tweets: Iterable[Tweet]) -> Iterable[Appearance]:
             text = re.sub("および|及び|、", " & ", text)
             text = re.sub("間と", "間 & ", text)
 
-            if match := re.search(r"(?P<train>列車|特急\S+|快速\S*?|はこだてライナー)(が|は.+?(で|において))(?P<reason>(?P<object>\S+)(と|を|の)(接触|衝突|衝撃|発見|巻き込んで))", text):
+            if match := re.search(r"(?P<train>貨物列車|列車|特急\S+|快速\S*?|はこだてライナー)(が|は.+?(で|において))(?P<reason>(?P<object>\S+)(と|を|の)(接触|衝突|衝撃|発見|巻き込んで))", text):
                 reason, object, train = match.group("reason", "object", "train")
             else:
                 #logger.debug(f"Error(animal): {tweet.text=}")
@@ -116,8 +116,8 @@ for a in appearances:
         else:
             lat, lon = Location.midpoint(station_locations[s[0]], station_locations[s[1]]).to_tuple()
             place = f"{s[0]} ～ {s[1]} 駅間"
-        text = f"{place}\n{a.datetime} {a.train}\n{a.reason}"
-        rows.append((lat, lon, text, a.datetime, get_icon_data(a.object)))
+        text = f"{place}\n{a.date} {a.train}\n{a.reason}"
+        rows.append((lat, lon, text, a.date, get_icon_data(a.object)))
 
 data = pd.DataFrame(
    rows,

@@ -10,7 +10,7 @@ class Tweet:
 
 @dataclass(frozen=True)
 class Appearance:
-    datetime: str
+    date: str
     sections: list[tuple[str, str]]
     reason: str
     object: str
