@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, date
 import json
 import logging 
 from pathlib import Path
@@ -29,10 +29,21 @@ ICON_DATA = {
 #logger.addHandler(ch)
 
 
-def find_date_range(tweets: list[Tweet]) -> tuple[str, str]:
+def find_date_range(tweets: list[Tweet]) -> tuple[datetime, datetime]:
     latest = datetime.fromisoformat(tweets[0].created_at)
     oldest = datetime.fromisoformat(tweets[-1].created_at)
     return (oldest, latest)
+
+
+def generate_date_sequence(start_date: datetime, end_date: datetime) -> Iterable[str]:
+    for n in range(int((end_date - start_date).days) + 1):
+        yield (start_date + timedelta(n)).strftime("%Y-%m-%d")
+
+
+def get_elapsed_days(start_date: str, end_date: str) -> int:
+    sd = datetime.strptime(start_date, "%Y-%m-%d")
+    ed = datetime.strptime(end_date, "%Y-%m-%d")
+    return (ed - sd).days
 
 
 def extract_appearance(tweets: Iterable[Tweet]) -> Iterable[Appearance]:    
@@ -62,7 +73,7 @@ def extract_appearance(tweets: Iterable[Tweet]) -> Iterable[Appearance]:
                 #f.write(f"Error(location): {text=}\n")
                 continue            
 
-            date_str = datetime.fromisoformat(tweet.created_at).strftime("%Y/%m/%d")
+            date_str = datetime.fromisoformat(tweet.created_at).strftime("%Y-%m-%d")
             yield Appearance(date_str, sections, reason, train, text)
 
 
@@ -75,17 +86,9 @@ tweets = get_tweets()
 #j = json.dumps({ "total": len(tweets), "tweets": [ t.__dict__ for t in tweets] }, ensure_ascii=False, indent=2)
 #Path("data/tweets.json").write_text(j, encoding="utf-8-sig")
 
-oldest, latest = find_date_range(tweets)
-date_range = (latest - oldest)
-start_color, end_color = st.select_slider(
-    "期間を選択",
-    options=['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'],
-    value=('red', 'blue'))
-
 appearances = list(extract_appearance(tweets))
 #j = json.dumps([a.__dict__ for a in appearances], ensure_ascii=False, indent=2)
 #st.json(j)
-st.text(f"集計期間: {oldest.strftime('%Y/%m/%d')}～{latest.strftime('%Y/%m/%d')} ({date_range.days}日), 件数: {len(appearances)}")
 
 rows = []
 for a in appearances:
@@ -97,11 +100,22 @@ for a in appearances:
             lat, lon = Location.midpoint(station_locations[s[0]], station_locations[s[1]]).to_tuple()
             place = f"{s[0]} ～ {s[1]} 駅間"
         text = f"{place}\n{a.datetime} {a.train}\n{a.reason}"
-        rows.append((lat, lon, text, ICON_DATA))
+        rows.append((lat, lon, text, a.datetime, ICON_DATA))
 
 data = pd.DataFrame(
    rows,
-   columns=["lat", "lon", "text", "icon_data"])
+   columns=["lat", "lon", "text", "date", "icon_data"])
+
+oldest, latest = find_date_range(tweets)
+date_sequence = list(generate_date_sequence(oldest, latest))
+
+oldest_, latest_ = st.select_slider(
+    "期間を選択",
+    options=list(str(d) for d in date_sequence),
+    value=(date_sequence[0], date_sequence[-1]))
+
+data = data.query(f"'{oldest_}' <= date <= '{latest_}'")
+st.text(f"集計期間: {oldest_} ～ {latest_} ({get_elapsed_days(oldest_, latest_)}日)\n件数: {len(data)}")
 
 st.pydeck_chart(pdk.Deck(
     map_style="light",
@@ -128,7 +142,7 @@ st.pydeck_chart(pdk.Deck(
 #j = json.dumps([a.__dict__ for a in appearances], ensure_ascii=False, indent=2)
 #st.json(j)
 
-#st.table(data)
+st.table(data)
 
 st.markdown("""
 ---
