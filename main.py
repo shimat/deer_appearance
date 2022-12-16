@@ -3,7 +3,7 @@ import json
 import logging 
 from pathlib import Path
 import re
-from typing import Iterable
+from typing import Iterable, Any
 import pandas as pd
 import numpy as np
 import pydeck as pdk
@@ -13,20 +13,37 @@ from models import Tweet, Appearance, Location
 from data_loader import get_tweets, get_station_locations
 
 
-ICON_DATA = {
-    "url": "https://raw.githubusercontent.com/shimat/deer_appearance/5554b83be16fc41d857d33ef83ee15d82b55f0e0/data/animal_deer.png",
-    "width": 803,
-    "height": 1053,
-    "anchorY": 1053,
-}
-
-
 #logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
 #fh = logging.FileHandler("error_log.txt", mode="w", encoding="utf-8-sig")
 #ch = logging.StreamHandler()
 #logger.addHandler(fh)
 #logger.addHandler(ch)
+
+ICON_DATA = {
+    "鹿": {
+        "url": "https://raw.githubusercontent.com/shimat/deer_appearance/ec75280793daa24d76b2ed591ca1125bfd1877a6/image/animal_deer.png",
+        "width": 305,
+        "height": 400,
+        "anchorY": 400,
+    },
+    "熊": {
+        "url": "https://raw.githubusercontent.com/shimat/deer_appearance/6e083a7bcfb20e9fdc66efc35b1c4131d07b4ec7/image/animal_bear_character.png",
+        "width": 400,
+        "height": 400,
+        "anchorY": 400,
+    },
+    "_その他_": {
+        "url": "https://raw.githubusercontent.com/shimat/deer_appearance/6e083a7bcfb20e9fdc66efc35b1c4131d07b4ec7/image/mark_question.png",
+        "width": 157,
+        "height": 200,
+        "anchorY": 200,
+    },
+}
+
+
+def get_icon_data(object: str) -> dict[str, Any]:
+    return ICON_DATA.get(object, ICON_DATA["_その他_"])
 
 
 def find_date_range(tweets: list[Tweet]) -> tuple[datetime, datetime]:
@@ -54,8 +71,8 @@ def extract_appearance(tweets: Iterable[Tweet]) -> Iterable[Appearance]:
             text = re.sub("および|及び|、", " & ", text)
             text = re.sub("間と", "間 & ", text)
 
-            if match := re.search(r"(?P<train>列車|特急\S+|快速\S*?|はこだてライナー)(が|は.+?(で|において))(?P<reason>(?P<animal>\S+)(と|を|の)(接触|衝突|衝撃|発見|巻き込んで))", text):
-                reason, train = match.group("reason", "train")
+            if match := re.search(r"(?P<train>列車|特急\S+|快速\S*?|はこだてライナー)(が|は.+?(で|において))(?P<reason>(?P<object>\S+)(と|を|の)(接触|衝突|衝撃|発見|巻き込んで))", text):
+                reason, object, train = match.group("reason", "object", "train")
             else:
                 #logger.debug(f"Error(animal): {tweet.text=}")
                 #f.write(f"Error(animal): {text=}\n")
@@ -74,7 +91,7 @@ def extract_appearance(tweets: Iterable[Tweet]) -> Iterable[Appearance]:
                 continue            
 
             date_str = datetime.fromisoformat(tweet.created_at).strftime("%Y-%m-%d")
-            yield Appearance(date_str, sections, reason, train, text)
+            yield Appearance(date_str, sections, reason, object, train, text)
 
 
 st.set_page_config(page_title="JR北海道 鹿衝突マップ")
@@ -100,7 +117,7 @@ for a in appearances:
             lat, lon = Location.midpoint(station_locations[s[0]], station_locations[s[1]]).to_tuple()
             place = f"{s[0]} ～ {s[1]} 駅間"
         text = f"{place}\n{a.datetime} {a.train}\n{a.reason}"
-        rows.append((lat, lon, text, a.datetime, ICON_DATA))
+        rows.append((lat, lon, text, a.datetime, get_icon_data(a.object)))
 
 data = pd.DataFrame(
    rows,
@@ -142,7 +159,7 @@ st.pydeck_chart(pdk.Deck(
 #j = json.dumps([a.__dict__ for a in appearances], ensure_ascii=False, indent=2)
 #st.json(j)
 
-st.table(data)
+#st.table(data)
 
 st.markdown("""
 ---
@@ -151,6 +168,6 @@ st.markdown("""
 + JR北海道 在来線運行情報【非公式】[@JRHbot](https://twitter.com/JRHbot)
 + Twitter API: https://developer.twitter.com/
 + 鉄道駅LOD: https://uedayou.net/jrslod/
-+ いらすとや: https://www.irasutoya.com/2013/07/blog-post_4288.html
++ いらすとや: https://www.irasutoya.com/
 """)
 

@@ -13,6 +13,7 @@ class Appearance:
     datetime: str
     sections: list[tuple[str, str]]
     reason: str
+    object: str
     train: str
     text: str
 
