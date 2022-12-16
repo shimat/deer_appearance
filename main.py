@@ -128,7 +128,7 @@ date_sequence = list(generate_date_sequence(oldest, latest))
 
 oldest_, latest_ = st.select_slider(
     "期間を選択",
-    options=list(str(d) for d in date_sequence),
+    options=date_sequence,
     value=(date_sequence[0], date_sequence[-1]))
 
 data = data.query(f"'{oldest_}' <= date <= '{latest_}'")
